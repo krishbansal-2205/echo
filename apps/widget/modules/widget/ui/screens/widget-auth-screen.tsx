@@ -14,15 +14,23 @@ import { WidgetHeader } from '../components/widget-header';
 import { useMutation } from 'convex/react';
 import { api } from '@workspace/backend/_generated/api';
 import { Doc } from '@workspace/backend/_generated/dataModel';
+import { useAtomValue, useSetAtom } from 'jotai';
+import {
+   contactSesssionAtomFamily,
+   organizationIdAtom,
+} from '../../atoms/widget-atoms';
 
 const formSchema = z.object({
    name: z.string().min(1, 'Name is required'),
    email: z.string().email('Invalid email address'),
 });
 
-const organizationId = '123';
-
 export const WidgetAuthScreen = () => {
+   const organizationId = useAtomValue(organizationIdAtom);
+   const setContactSessionId = useSetAtom(
+      contactSesssionAtomFamily(organizationId || '')
+   );
+
    const form = useForm<z.infer<typeof formSchema>>({
       resolver: zodResolver(formSchema),
       defaultValues: {
@@ -57,7 +65,7 @@ export const WidgetAuthScreen = () => {
          metadata,
       });
 
-      console.log('Contact Session ID:', contactSessionId);
+      setContactSessionId(contactSessionId);
    };
 
    return (
@@ -65,7 +73,7 @@ export const WidgetAuthScreen = () => {
          <WidgetHeader>
             <div className='flex flex-col justify-between gap-y-2 px-2 py-6 font-semibold'>
                <p className='text-3xl'>Hi there! 👋🏻</p>
-               <p className='text-lg'>Lets get you started</p>
+               <p className='text-lg'>Let&apos;s get you started</p>
             </div>
          </WidgetHeader>
          <Form {...form}>
