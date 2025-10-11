@@ -1,7 +1,13 @@
 import { ConvexError, v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
-import { createThread, saveMessage } from '@convex-dev/agent';
+import {
+   createThread,
+   listMessages,
+   MessageDoc,
+   saveMessage,
+} from '@convex-dev/agent';
 import { components } from '../_generated/api';
+import { paginationOptsValidator } from 'convex/server';
 
 export const create = mutation({
    args: {
@@ -75,6 +81,60 @@ export const getOne = query({
          _id: conversation._id,
          status: conversation.status,
          threadId: conversation.threadId,
+      };
+   },
+});
+
+export const getMany = query({
+   args: {
+      contactSessionId: v.id('contactSession'),
+      paginationOpts: paginationOptsValidator,
+   },
+   handler: async (ctx, args) => {
+      const session = await ctx.db.get(args.contactSessionId);
+
+      if (!session || session.expiresAt < Date.now()) {
+         throw new ConvexError({
+            code: 'UNAUTHORIZED',
+            message: 'Invalid session',
+         });
+      }
+
+      const conversations = await ctx.db
+         .query('conversations')
+         .withIndex('by_contact_session_id', (q) =>
+            q.eq('contactSessionId', args.contactSessionId)
+         )
+         .order('desc')
+         .paginate(args.paginationOpts);
+
+      const conversationsWithLastMessage = await Promise.all(
+         conversations.page.map(async (conversation) => {
+            let lastMessage: MessageDoc | null = null;
+
+            const messages = await listMessages(ctx, components.agent, {
+               threadId: conversation.threadId,
+               paginationOpts: { numItems: 1, cursor: null },
+            });
+
+            if (messages.page.length > 0) {
+               lastMessage = messages.page[0] ?? null;
+            }
+
+            return {
+               _id: conversation._id,
+               _creationTime: conversation._creationTime,
+               status: conversation.status,
+               organizationId: conversation.organizationId,
+               threadId: conversation.threadId,
+               lastMessage,
+            };
+         })
+      );
+
+      return {
+         ...conversations,
+         page: conversationsWithLastMessage,
       };
    },
 });
